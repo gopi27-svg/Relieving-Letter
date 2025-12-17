@@ -3,17 +3,27 @@
 <head>
   <meta charset="UTF-8">
   <title>Relieving Letter Bulk Tool</title>
-
-  <!-- SheetJS -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
   <style>
     body { font-family: system-ui; margin: 24px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
-    th, td { border: 1px solid #ccc; padding: 8px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; font-size: 13px; }
+    th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
     th { background: #f4f6fb; }
-    .btn { background:#2257d6;color:#fff;padding:10px 16px;border:none;border-radius:8px;cursor:pointer }
-    .err { background:#ffe5e5 }
+    
+    .btn { background:#2257d6;color:#fff;padding:10px 16px;border:none;border-radius:6px;cursor:pointer; font-size: 14px; margin-right: 8px; }
+    .btn:disabled { background: #ccc; cursor: not-allowed; }
+    .btn-green { background: #0b8043; }
+    .btn-orange { background: #e37400; }
+    
+    .btn-sm { padding: 4px 8px; font-size: 12px; background: #555; }
+    .btn-sm.loading { background: #888; cursor: wait; }
+
+    .err { background:#ffe5e5; }
+    #status-msg { margin-top: 10px; font-weight: bold; min-height: 20px; color: blue; }
+    
+    /* Warning box for popups */
+    .warning-box { background: #fff3cd; border: 1px solid #ffeeba; padding: 10px; border-radius: 5px; margin-top: 10px; font-size: 13px; display: none; }
   </style>
 </head>
 <body>
@@ -24,21 +34,36 @@
 <br><br>
 
 <input type="file" id="file" accept=".xlsx" />
+
+<div id="popup-warning" class="warning-box">
+  ⚠️ <strong>Browser Warning:</strong> If files stop downloading after the first one, check your address bar (top right) and <strong>"Allow multiple downloads"</strong> for this site.
+</div>
+
+<div id="status-msg"></div>
+
+<!-- Control Buttons -->
+<div style="margin-top:20px;">
+  <!-- Changed to One-by-One Download -->
+  <button id="dlAllBtn" class="btn btn-orange" onclick="downloadAllSequentially()" disabled>⬇ Download All PDFs (One by One)</button>
+  <button id="sendBtn" class="btn btn-green" onclick="sendToAPI()" disabled>📨 Send All Mails (Bulk)</button>
+</div>
+
 <div id="preview"></div>
 
-<br>
-<button class="btn" onclick="sendToAPI()">📨 Send Mails</button>
-
 <script>
+// 🔴 REPLACE WITH YOUR NEW DEPLOYMENT URL
 const API_URL = 'https://script.google.com/macros/s/AKfycbxsqOdcW-cn0ftSrzV98IvPINjGhyktR2mRVWf0hqDDorArGtKTZS3c5W5V-AGp4FSo/exec';
 
 let rows = [];
 
 function downloadSample() {
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet([
-    ['Employee Name','Designation','Date of Joining','Date of Exit','Email']
-  ]);
+  const data = [
+    ['Employee Name','Designation','Date of Joining','Date of Exit','Email'],
+    ['John Doe', 'Software Engineer', new Date(2022, 0, 15), new Date(2023, 11, 20), 'john@example.com'] 
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [{wch:20}, {wch:20}, {wch:15}, {wch:15}, {wch:25}];
   XLSX.utils.book_append_sheet(wb, ws, 'Sample');
   XLSX.writeFile(wb, 'Relieving_Letter_Sample.xlsx');
 }
@@ -46,37 +71,151 @@ function downloadSample() {
 document.getElementById('file').addEventListener('change', e => {
   const reader = new FileReader();
   reader.onload = evt => {
-    const wb = XLSX.read(evt.target.result, { type:'binary' });
+    const wb = XLSX.read(evt.target.result, { type:'binary', cellDates: true });
     rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    
+    rows = rows.map(r => {
+      if(r['Date of Joining'] instanceof Date) r['Date of Joining'] = formatDateForDisplay(r['Date of Joining']);
+      if(r['Date of Exit'] instanceof Date) r['Date of Exit'] = formatDateForDisplay(r['Date of Exit']);
+      return r;
+    });
+
     renderPreview();
+    document.getElementById('dlAllBtn').disabled = false;
+    document.getElementById('sendBtn').disabled = false;
+    document.getElementById('popup-warning').style.display = 'block';
   };
   reader.readAsBinaryString(e.target.files[0]);
 });
 
+function formatDateForDisplay(dateObj) {
+  const day = dateObj.getDate();
+  const month = dateObj.toLocaleString('default', { month: 'short' });
+  const year = dateObj.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
 function renderPreview() {
+  if (!rows || rows.length === 0) return;
+  
   let html = '<table><tr>';
   Object.keys(rows[0]).forEach(h => html += `<th>${h}</th>`);
-  html += '</tr>';
+  html += '<th>Action</th></tr>';
 
-  rows.forEach(r => {
-    const bad = !r['Employee Name'] || !r['Designation'] || !r['Date of Exit'] || !r['Email'];
+  rows.forEach((r, index) => {
+    const bad = !r['Employee Name'] || !r['Email']; 
     html += `<tr class="${bad?'err':''}">`;
     Object.values(r).forEach(v => html += `<td>${v||''}</td>`);
+    html += `<td><button class="btn btn-sm" id="btn-${index}" onclick="downloadSinglePDF(${index})">⬇ PDF</button></td>`;
     html += '</tr>';
   });
   html += '</table>';
   document.getElementById('preview').innerHTML = html;
 }
 
+// --- ACTION 1: DOWNLOAD ALL SEQUENTIALLY ---
+async function downloadAllSequentially() {
+  const mainBtn = document.getElementById('dlAllBtn');
+  const status = document.getElementById('status-msg');
+  
+  if(!confirm(`This will download ${rows.length} files one by one.\n\nPlease ensure you have allowed "Multiple Downloads" in your browser settings if prompted.`)) return;
+
+  mainBtn.disabled = true;
+  mainBtn.innerText = "Processing...";
+
+  // Loop through all rows
+  for (let i = 0; i < rows.length; i++) {
+    status.innerText = `Downloading ${i + 1} of ${rows.length}: ${rows[i]['Employee Name']}...`;
+    
+    // Call the single download function and wait for it to finish
+    try {
+      await downloadSinglePDF(i, true); // true = silent mode (no alerts)
+    } catch (e) {
+      console.error(e);
+    }
+    
+    // Add a small delay to prevent browser choking
+    await new Promise(r => setTimeout(r, 1500)); 
+  }
+
+  status.innerText = "All downloads completed.";
+  status.style.color = "green";
+  mainBtn.disabled = false;
+  mainBtn.innerText = "⬇ Download All PDFs (One by One)";
+}
+
+// --- ACTION 2: DOWNLOAD SINGLE PDF ---
+// Returns a Promise so we can await it in the loop
+function downloadSinglePDF(index, silentMode = false) {
+  return new Promise((resolve, reject) => {
+    const rowData = rows[index];
+    const btn = document.getElementById(`btn-${index}`);
+    const originalText = btn ? btn.innerText : '';
+    
+    if(btn) {
+      btn.innerText = "⏳";
+      btn.classList.add('loading');
+      btn.disabled = true;
+    }
+
+    fetch(API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'generate_pdf', row: rowData })
+    })
+    .then(r => r.json())
+    .then(res => {
+      if(res.status === 'ok' && res.pdfBase64) {
+        const link = document.createElement('a');
+        link.href = 'data:application/pdf;base64,' + res.pdfBase64;
+        // Backend now handles the filename logic, but we can double check here or trust backend name if sent
+        // Using filename from backend response is safer if available, but here we construct it
+        link.download = res.fileName || `Relieving_Letter_${index}.pdf`;
+        link.click();
+        resolve();
+      } else {
+        if(!silentMode) alert('Error: ' + res.message);
+        reject(res.message);
+      }
+    })
+    .catch(err => {
+      if(!silentMode) alert('Error: ' + err);
+      reject(err);
+    })
+    .finally(() => {
+      if(btn) {
+        btn.innerText = "⬇ PDF"; // Reset text
+        btn.classList.remove('loading');
+        btn.disabled = false;
+      }
+    });
+  });
+}
+
+// --- ACTION 3: SEND BULK EMAIL ---
 function sendToAPI() {
+  const btn = document.getElementById('sendBtn');
+  const status = document.getElementById('status-msg');
+  
+  btn.innerText = "Sending...";
+  btn.disabled = true;
+  status.innerText = "Processing email queue...";
+
   fetch(API_URL, {
     method: 'POST',
-    headers: { 'Content-Type':'application/json' },
-    body: JSON.stringify({ rows })
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ action: 'bulk_email', rows: rows })
   })
   .then(r => r.json())
-  .then(res => alert(res.message))
-  .catch(err => alert('Error: ' + err));
+  .then(res => {
+    status.innerText = res.message;
+    alert(res.message);
+  })
+  .catch(err => status.innerText = "Error: " + err)
+  .finally(() => {
+    btn.innerText = "📨 Send All Mails (Bulk)";
+    btn.disabled = false;
+  });
 }
 </script>
 
