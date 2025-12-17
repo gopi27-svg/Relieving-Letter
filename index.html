@@ -1,299 +1,84 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="utf-8" />
-  <title>Relieving Letter Generator — v8.1</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <meta charset="UTF-8">
+  <title>Relieving Letter Bulk Tool</title>
+
+  <!-- SheetJS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
   <style>
-    :root{
-      --bg2:#f7f9fc;
-      --card:#ffffff;
-      --text:#1f2937;
-      --muted:#6b7280;
-      --primary:#2456d6;
-      --border:#e5e7eb;
-      --accent:#e9eefc;
-      --row-even:#f9fbff;
-      --shadow: 0 10px 30px rgba(31,41,55,.08);
-      --radius:16px;
-    }
-    *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans", "Helvetica Neue", sans-serif;
-      color:var(--text);
-      background: radial-gradient(1200px 700px at 15% -10%, #f4f7ff 0, transparent 70%),
-                  radial-gradient(1000px 600px at 110% 0%, #f1f6ff 0, transparent 60%),
-                  var(--bg2);
-    }
-    .wrap{max-width:1100px;margin:48px auto;padding:0 20px}
-    .hero{text-align:center;margin-bottom:22px}
-    .hero .title{font-size:clamp(22px,2.4vw,30px);font-weight:700;letter-spacing:.2px;margin:0}
-    .hero .subtitle{color:var(--muted);margin-top:8px;font-size:14px}
-    .accentbar{height:6px;width:140px;margin:14px auto 0;border-radius:999px;background:linear-gradient(90deg,#9fb8ff,#2456d6 55%,#0fa3ff);opacity:.9}
-    .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
-    .card-header{display:flex;gap:14px;align-items:center;justify-content:space-between;padding:16px 18px;background:linear-gradient(180deg,#ffffff,#fafcff);border-bottom:1px solid var(--border)}
-    .metrics{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-    .badge{display:inline-flex;align-items:center;gap:8px;background:var(--accent);color:#25468f;border:1px solid #dfe6fb;border-radius:999px;padding:6px 10px;font-weight:600;font-size:12px}
-    .badge svg{width:16px;height:16px}
-    .card-body{padding:16px 18px 18px}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-    @media (max-width:820px){.grid{grid-template-columns:1fr}}
-    .field{display:flex;flex-direction:column;gap:8px}
-    .label{font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.2px}
-    .control{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .btn{appearance:none;border:none;cursor:pointer;user-select:none;background:#f3f6ff;color:#1c2a5d;border:1px solid #dce6ff;padding:10px 14px;border-radius:12px;font-weight:700;font-size:14px;transition:all .15s ease;display:inline-flex;align-items:center;gap:8px;text-decoration:none}
-    .btn:hover{transform:translateY(-1px);box-shadow:0 8px 16px rgba(36,86,214,.12)}
-    .btn.primary{background:linear-gradient(180deg,#3a74ff,var(--primary));color:#fff;border:0;box-shadow:0 8px 16px rgba(36,86,214,.18)}
-    .btn[disabled]{opacity:.55;cursor:not-allowed;transform:none;box-shadow:none}
-    input[type="file"]{width:100%;padding:10px 12px;border:1px dashed var(--border);border-radius:12px;background:#fbfcff;color:var(--muted)}
-    .table-wrap{margin-top:12px;border:1px solid var(--border);border-radius:12px;overflow:hidden}
-    table{width:100%;border-collapse:collapse;font-size:14px}
-    thead th{background:#f6f8fc;color:#334155;text-align:left;padding:12px;border-bottom:1px solid var(--border);font-weight:700;letter-spacing:.2px}
-    tbody td{padding:12px;border-bottom:1px solid var(--border);vertical-align:top}
-    tbody tr:nth-child(even){background:var(--row-even)}
-    tbody tr:hover{background:#f3f7ff}
-    .muted{color:var(--muted);font-size:12px}
-    .hint{margin-top:8px}
-    .footer-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
+    body { font-family: system-ui; margin: 24px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 16px; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+    th { background: #f4f6fb; }
+    .btn { background:#2257d6;color:#fff;padding:10px 16px;border:none;border-radius:8px;cursor:pointer }
+    .err { background:#ffe5e5 }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="hero">
-      <h1 class="title">Relieving Letter Generator</h1>
-      <div class="accentbar"></div>
-      <p class="subtitle">Upload CSV ➜ review ➜ generate individual PDFs</p>
-    </div>
 
-    <div class="card">
-      <div class="card-header">
-        <div class="metrics">
-          <span class="badge">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M4 6h16M4 12h16M4 18h16" stroke="#2e4fbf" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-            Rows: <span id="rowCount">0</span>
-          </span>
-          <span class="badge" id="badge-ready">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M5 13l4 4L19 7" stroke="#2e4fbf" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            Ready
-          </span>
-        </div>
-      </div>
+<h2>📧 Relieving Letter Bulk Tool</h2>
 
-      <div class="card-body">
-        <div class="grid">
-          <div class="field">
-            <div class="label">1) Download sample CSV</div>
-            <div class="control">
-              <a class="btn" id="sampleCsv">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                Sample.csv
-              </a>
-                        </div>
-          </div>
-          <div class="field">
-            <div class="label">2) Upload your CSV (.csv)</div>
-            <input type="file" id="fileInput" accept=".csv" />
-          </div>
-        </div>
+<button class="btn" onclick="downloadSample()">⬇ Download Sample Excel</button>
+<br><br>
 
-        <div class="footer-actions">
-          <div class="control">
-            <button class="btn" id="btnSelectAll">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-              Select All
-            </button>
-            <button class="btn" id="btnClear">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M6 18L18 6M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-              Clear
-            </button>
-            <button class="btn primary" id="btnGenerate" disabled>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M5 12h14M12 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              Generate Selected
-            </button>
-          </div>
-        </div>
+<input type="file" id="file" accept=".xlsx" />
+<div id="preview"></div>
 
-        <div class="table-wrap" id="tableWrap" style="display:none">
-          <table id="dataTable">
-            <thead></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-  </div>
+<br>
+<button class="btn" onclick="sendToAPI()">📨 Send Mails</button>
 
-  <form id="postForm" method="POST" target="_self" style="display:none">
-    <input type="hidden" name="rows" id="rowsField" />
-  </form>
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbxsqOdcW-cn0ftSrzV98IvPINjGhyktR2mRVWf0hqDDorArGtKTZS3c5W5V-AGp4FSo/exec';
 
-  <script>
-    const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxLYzmXeC5AK6v1FQDO6oXz5h8m0ErWNXG5p1QMlQqTQxXpgeHUlqFmK2FRxuGpnLxm/exec';
+let rows = [];
 
-    const SAMPLE_CSV =
-`Employee Name,Designation,Date of Joining,Date of Exit
-`;
+function downloadSample() {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Employee Name','Designation','Date of Joining','Date of Exit','Email']
+  ]);
+  XLSX.utils.book_append_sheet(wb, ws, 'Sample');
+  XLSX.writeFile(wb, 'Relieving_Letter_Sample.xlsx');
+}
 
-    const el = id => document.getElementById(id);
-    const fileInput   = el('fileInput');
-    const btnSelectAll= el('btnSelectAll');
-    const btnClear    = el('btnClear');
-    const btnGenerate = el('btnGenerate');
-    const tableWrap   = el('tableWrap');
-    const dataTable   = el('dataTable');
-    const rowCountEl  = el('rowCount');
-    const badgeReady  = el('badge-ready');
-    const sampleCsvBtn= el('sampleCsv');
-    const postForm    = el('postForm');
-    const rowsField   = el('rowsField');
+document.getElementById('file').addEventListener('change', e => {
+  const reader = new FileReader();
+  reader.onload = evt => {
+    const wb = XLSX.read(evt.target.result, { type:'binary' });
+    rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    renderPreview();
+  };
+  reader.readAsBinaryString(e.target.files[0]);
+});
 
-    sampleCsvBtn.addEventListener('click', () => {
-      const url = 'data:text/csv;charset=utf-8,' + encodeURIComponent(SAMPLE_CSV);
-      sampleCsvBtn.setAttribute('href', url);
-      sampleCsvBtn.setAttribute('download', 'Relieving_Letter_Sample.csv');
-    });
+function renderPreview() {
+  let html = '<table><tr>';
+  Object.keys(rows[0]).forEach(h => html += `<th>${h}</th>`);
+  html += '</tr>';
 
-    let rows = [], headers = [], selected = new Set();
+  rows.forEach(r => {
+    const bad = !r['Employee Name'] || !r['Designation'] || !r['Date of Exit'] || !r['Email'];
+    html += `<tr class="${bad?'err':''}">`;
+    Object.values(r).forEach(v => html += `<td>${v||''}</td>`);
+    html += '</tr>';
+  });
+  html += '</table>';
+  document.getElementById('preview').innerHTML = html;
+}
 
-    fileInput.addEventListener('change', handleFile);
-    btnSelectAll.addEventListener('click', () => { selected = new Set(rows.map((_, i) => i)); refreshChecks(); updateButtons(); });
-    btnClear.addEventListener('click',   () => { selected.clear(); refreshChecks(); updateButtons(); });
-    btnGenerate.addEventListener('click', generate);
+function sendToAPI() {
+  fetch(API_URL, {
+    method: 'POST',
+    headers: { 'Content-Type':'application/json' },
+    body: JSON.stringify({ rows })
+  })
+  .then(r => r.json())
+  .then(res => alert(res.message))
+  .catch(err => alert('Error: ' + err));
+}
+</script>
 
-    async function handleFile(evt){
-      const file = evt.target.files[0];
-      if (!file) return;
-      if (!file.name.toLowerCase().endsWith('.csv')){ alert('Please upload a .csv file'); return; }
-      const text = await file.text();
-      rows = parseCSVSmart(text);
-      headers = inferHeaders(rows);
-      selected = new Set(rows.map((_, i) => i));
-      rowCountEl.textContent = String(rows.length);
-      renderTable();
-      updateButtons();
-      tableWrap.style.display = rows.length ? 'block' : 'none';
-    }
-
-    // Robust CSV parser
-    function parseCSVSmart(text){
-      // strip BOM
-      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
-      // normalize newlines
-      text = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
-      // detect delimiter by first non-empty line
-      const firstLine = (text.split('\n').find(l => l.trim().length) || '');
-      const candidates = [',',';','\t'];
-      let delim = ',';
-      let best = 0;
-      for (const d of candidates){
-        const c = splitCSVLine(firstLine,d).length;
-        if (c > best){ best = c; delim = d; }
-      }
-      const lines = text.split('\n').filter(l => l.trim().length>0);
-      if (!lines.length) return [];
-      const headers = splitCSVLine(lines[0],delim).map(h=>trimQuotes(h.trim()));
-      const out = [];
-      for (let i=1;i<lines.length;i++){
-        const cols = splitCSVLine(lines[i],delim);
-        if (cols.every(c => trimQuotes(c).trim()==='')) continue;
-        const obj = {};
-        headers.forEach((h,j)=>{ obj[h] = trimQuotes(cols[j] || '').trim(); });
-        out.push(obj);
-      }
-      return out;
-    }
-    function splitCSVLine(line,delim){
-      const res = [];
-      let cur = '', i=0, inQ=false;
-      while(i<line.length){
-        const ch = line[i];
-        if (inQ){
-          if (ch === '"'){
-            if (line[i+1] === '"'){ cur+='"'; i+=2; continue; } // escaped quote
-            inQ = false; i++; continue;
-          } else { cur += ch; i++; continue; }
-        }else{
-          if (ch === '"'){ inQ = true; i++; continue; }
-          if (ch === delim){ res.push(cur); cur=''; i++; continue; }
-          cur += ch; i++; continue;
-        }
-      }
-      res.push(cur);
-      return res;
-    }
-    function trimQuotes(s){
-      s = s || '';
-      if (s.startsWith('"') && s.endsWith('"')) s = s.substring(1,s.length-1);
-      return s.replace(/""/g,'"');
-    }
-
-    function inferHeaders(arr){
-      if (!arr.length) return [];
-      const keys = new Set();
-      arr.forEach(r => Object.keys(r).forEach(k => keys.add(k)));
-      const preferred = ['Employee Name','Designation','Date of Joining','Date of Exit','LetterDate','Email'];
-      const final = [];
-      preferred.forEach(k => { if (keys.has(k)) { final.push(k); keys.delete(k); } });
-      return final.concat(Array.from(keys));
-    }
-
-    function renderTable(){
-      const thead = dataTable.querySelector('thead');
-      const tbody = dataTable.querySelector('tbody');
-      thead.innerHTML = ''; tbody.innerHTML = '';
-
-      const trH = document.createElement('tr');
-      const thSel = document.createElement('th'); thSel.textContent = 'Select'; trH.appendChild(thSel);
-      headers.forEach(h => { const th = document.createElement('th'); th.textContent = h; trH.appendChild(th); });
-      thead.appendChild(trH);
-
-      const cap = Math.min(rows.length, 5000);
-      for (let i = 0; i < cap; i++){
-        const r = rows[i];
-        const tr = document.createElement('tr');
-        const tdSel = document.createElement('td');
-        const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = selected.has(i);
-        cb.addEventListener('change', () => { if (cb.checked) selected.add(i); else selected.delete(i); updateButtons(); });
-        tdSel.appendChild(cb); tr.appendChild(tdSel);
-        headers.forEach(h => { const td = document.createElement('td'); td.textContent = r[h] ?? ''; tr.appendChild(td); });
-        tbody.appendChild(tr);
-      }
-    }
-
-    function refreshChecks(){
-      const tbody = dataTable.querySelector('tbody'); if (!tbody) return;
-      Array.from(tbody.querySelectorAll('tr')).forEach((tr, i) => {
-        const cb = tr.querySelector('input[type=checkbox]'); if (cb) cb.checked = selected.has(i);
-      });
-    }
-    function updateButtons(){
-      const ready = !!selected.size && WEB_APP_URL && WEB_APP_URL.startsWith('http');
-      btnGenerate.disabled = !ready;
-      el('badge-ready').style.opacity = ready ? 1 : .45;
-    }
-    function generate(){
-      if (!selected.size){ alert('Please select at least one row'); return; }
-      const payloadRows = Array.from(selected).map(i => rows[i]);
-      rowsField.value = JSON.stringify(payloadRows);
-      postForm.action = WEB_APP_URL;
-      postForm.submit();
-    }
-  </script>
 </body>
 </html>
